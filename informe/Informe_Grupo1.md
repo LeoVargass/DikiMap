@@ -13,10 +13,12 @@
 
 **Integrantes (Apellido y Nombre):**
 
-- Vargas, Leonardo Alex Emir
-- Urzagaste, Santiago Joaquín
-- Jorqui, Ignacio Elías
-- Lamas Méndez, Cristian Octavio
+<div class="integrantes">
+<figure><img src="../figuras/foto_leo.png" alt="Leonardo Vargas"><figcaption>Vargas,<br>Leonardo Alex Emir</figcaption></figure>
+<figure><img src="../figuras/foto_santi.png" alt="Santiago Urzagaste"><figcaption>Urzagaste,<br>Santiago Joaquín</figcaption></figure>
+<figure><img src="../figuras/foto_ignacio.png" alt="Ignacio Jorqui"><figcaption>Jorqui,<br>Ignacio Elías</figcaption></figure>
+<figure><img src="../figuras/foto_octavio.png" alt="Octavio Lamas"><figcaption>Lamas Méndez,<br>Cristian Octavio</figcaption></figure>
+</div>
 
 **Tema elegido:** Grafos aplicados a la vida real — *cómo un GPS (Google Maps,
 PedidosYa, Mercado Libre) encuentra el camino más corto sobre la red de calles
@@ -264,8 +266,69 @@ A\* es idéntico pero la prioridad es `g + h` con `h` = distancia en línea rect
 
 ### 4.1 Transcripción de la consulta a la IA generativa
 
-> *[Pegar acá la conversación completa del foro: el prompt a la IA, su respuesta
-> y el intercambio entre los integrantes.]*
+Transcripción del hilo del foro de la cátedra (Grupo 1).
+
+**Vargas, Leonardo — Prompt a la IA** *(16/10/2026)*
+> Necesitamos que nos des una estructura sobre una exposición que vamos a hacer
+> acerca de grafos aplicados a acciones de la vida real, ej.: cómo se aplican los
+> grafos en Google Maps para encontrar el camino más corto; queremos que sea
+> interactivo con el público.
+
+**Respuesta de la IA** *(estructura propuesta, ~20 min)*
+> 1. **Gancho inicial (2 min).** Preguntar al público: "¿Cómo sabe el celular
+>    cuál es el camino más corto de su casa a la facultad?".
+> 2. **¿Qué es un grafo? (3 min).** Nodos y aristas, con o sin peso: las esquinas
+>    son nodos, las calles aristas y la distancia/tiempo el peso.
+> 3. **Otras aplicaciones (3 min).** Redes sociales, internet, logística,
+>    recomendaciones (Netflix/Spotify).
+> 4. **El problema del camino más corto (4 min).** Dijkstra explora en todas
+>    direcciones (como una onda en el agua); A\* "apunta" al destino con una
+>    heurística y explora menos.
+> 5. **Demo interactiva con mapa real (5 min).** El público elige origen y
+>    destino, adivina el camino y después se corre el algoritmo; mostrar
+>    Dijkstra vs. A\* lado a lado contando cuántos nodos explora cada uno.
+
+**Urzagaste, Santiago** *(16/10/2026)*
+> Para mejorar la interacción, que cada grupo de chicos pueda seleccionar un
+> sector de la ciudad que conozcan.
+
+**Jorqui, Ignacio** *(23/10/2026)*
+> En la diapo de cierre, un código QR: subir a un Drive el link de la demo para
+> que la prueben, y un PDF de 1 página con los conceptos clave (nodos, aristas,
+> Dijkstra vs. A\*).
+
+**Lamas, Octavio** *(23/10/2026)*
+> Además de esquinas normales, mostrar rápido una ruta donde el camino que parece
+> más largo en el mapa es en realidad el más rápido (por tener avenidas en vez de
+> calles con semáforos). Así mostramos que los algoritmos no eligen por cómo se ve
+> el mapa, sino calculando los **pesos reales** — un mensaje claro de cómo funciona
+> de verdad un GPS.
+
+**Jorqui, Ignacio** *(23/10/2026)*
+> Propongo un desafío extra: elegir 4 puntos y pedirle a un voluntario que arme a
+> ojo la ruta más corta para un repartidor que visita todos los lugares y vuelve
+> al inicio; después corremos el algoritmo en vivo. Muestra la diferencia entre la
+> intuición humana y el cálculo real de pesos en logística (como PedidosYa o
+> Mercado Libre).
+
+**Lamas, Octavio** *(23/10/2026)*
+> No me parece una propuesta viable.
+
+**Vargas, Leonardo** *(23/10/2026)*
+> La propuesta es atractiva como dinámica, pero no la considero viable para esta
+> demostración. El problema planteado corresponde al **problema del viajante**:
+> buscar la ruta óptima entre todos los puntos requiere evaluar una cantidad de
+> combinaciones que crece muy rápido a medida que se agregan destinos. Con cuatro
+> puntos podría resolverse sin dificultad, pero el ejemplo sería demasiado simple
+> para representar un caso real; además, cargar y configurar los puntos sumaría
+> complejidad. Podríamos considerar una versión más acotada, presentada
+> explícitamente como una simplificación del problema logístico.
+
+**Vargas, Leonardo — Cambios en el proyecto** *(05/11/2026)*
+> Salto a la red de calles REAL: la traza urbana de San Salvador de Jujuy bajada
+> de OpenStreetMap (API de Overpass). Ahora cada esquina es un nodo (1012) y cada
+> tramo de calle una arista (1541), con peso = la longitud real de la calle en
+> metros (≈159 km en total).
 
 ### 4.2 Observaciones, errores y limitaciones detectados y **corregidos** por el equipo
 
