@@ -1,0 +1,7 @@
+# Los scripts construir_datos_*.py usan SOLO la libreria estandar (sin dependencias).
+#
+# Unica variante que necesita librerias externas: red_real_osm.py (usa OSMnx):
+networkx
+matplotlib
+osmnx
+scikit-learn

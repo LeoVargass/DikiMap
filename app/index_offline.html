@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ganale al GPS — Grafos en San Salvador de Jujuy · Grupo 1</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#171e2e; --panel2:#1f2838;
+    --calle:#3a4760; --texto:#e8edf6; --sub:#9fb0c8;
+    --origen:#2ecc71; --destino:#ff5d5d; --ruta:#ffd23f;
+    --dij:#4aa3ff; --astar:#b37dff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;
+    background:var(--bg);color:var(--texto);overflow:hidden}
+  #mapa{position:absolute;inset:0;display:block;cursor:crosshair}
+  .panel{position:absolute;top:14px;left:14px;width:320px;max-width:calc(100vw - 28px);
+    background:rgba(23,30,46,.94);backdrop-filter:blur(6px);border:1px solid #2a3550;
+    border-radius:14px;padding:16px 16px 14px;box-shadow:0 10px 40px rgba(0,0,0,.45)}
+  .titulo{font-size:16px;font-weight:800;letter-spacing:.2px}
+  .titulo span{color:var(--ruta)}
+  .sub{font-size:11.5px;color:var(--sub);margin-top:3px;line-height:1.5}
+  .pasos{font-size:12px;color:var(--sub);margin:12px 0 10px;line-height:1.7}
+  .pasos b{color:var(--texto)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  button{flex:1;min-width:84px;cursor:pointer;border:1px solid #33425f;background:var(--panel2);
+    color:var(--texto);padding:9px 10px;border-radius:9px;font-size:12.5px;font-weight:600;
+    transition:.15s}
+  button:hover{background:#27324a;border-color:#42557a}
+  button.activo{background:#2b63b8;border-color:#4a86e0}
+  button.sec{flex:0 0 auto}
+  .stats{margin-top:13px;border-top:1px solid #2a3550;padding-top:12px;display:none}
+  .stats.show{display:block}
+  .srow{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;
+    padding:4px 0}
+  .srow .k{color:var(--sub)}
+  .srow .v{font-weight:800;font-variant-numeric:tabular-nums}
+  .bignum{font-size:22px;font-weight:900;color:var(--ruta);font-variant-numeric:tabular-nums}
+  .cmp{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .cmp .box{background:var(--panel2);border:1px solid #2a3550;border-radius:9px;padding:9px 10px}
+  .cmp .box .lab{font-size:11px;color:var(--sub);display:flex;align-items:center}
+  .cmp .box .num{font-size:19px;font-weight:900;font-variant-numeric:tabular-nums;margin-top:2px}
+  .foot{margin-top:12px;font-size:10.5px;color:#6f80a0;line-height:1.5;border-top:1px solid #2a3550;padding-top:9px}
+  .vel{display:flex;align-items:center;gap:7px;margin-top:11px;font-size:11.5px;color:var(--sub)}
+  .vel input{flex:1}
+  .credito{position:absolute;right:12px;bottom:10px;font-size:11px;color:#5d6d8c;
+    background:rgba(15,20,32,.7);padding:5px 10px;border-radius:8px}
+  .badge{position:absolute;right:14px;top:14px;background:rgba(23,30,46,.92);
+    border:1px solid #2a3550;border-radius:10px;padding:8px 12px;font-size:11.5px;color:var(--sub);
+    text-align:right;line-height:1.55}
+  .badge b{color:var(--texto)}
+  @media(max-width:560px){.panel{width:calc(100vw - 28px)}.badge{display:none}}
+</style>
+</head>
+<body>
+<canvas id="mapa"></canvas>
+
+<div class="panel">
+  <div class="titulo">Ganale al <span>GPS</span></div>
+  <div class="sub">Red real de calles de <b>San&nbsp;Salvador&nbsp;de&nbsp;Jujuy</b> (OpenStreetMap).
+    Cada esquina es un <b>nodo</b>, cada cuadra una <b>arista</b>.</div>
+
+  <div class="pasos">
+    <span class="dot" style="background:var(--origen)"></span><b>1.</b> Clic en el mapa = <b>origen</b><br>
+    <span class="dot" style="background:var(--destino)"></span><b>2.</b> Otro clic = <b>destino</b><br>
+    <span class="dot" style="background:var(--ruta)"></span><b>3.</b> Se calcula el <b>camino más corto</b>
+  </div>
+
+  <div class="row">
+    <button id="btnAstar" class="activo">A★ (dirigido)</button>
+    <button id="btnDij">Dijkstra (onda)</button>
+  </div>
+  <div class="row">
+    <button id="btnComparar">Comparar los dos</button>
+    <button id="btnReset" class="sec">↺</button>
+  </div>
+
+  <div class="vel">⚡ Velocidad
+    <input id="vel" type="range" min="1" max="60" value="18">
+  </div>
+
+  <div id="stats" class="stats">
+    <div class="srow"><span class="k">Distancia del camino</span><span class="v bignum" id="dist">—</span></div>
+    <div class="srow"><span class="k">Esquinas del recorrido</span><span class="v" id="saltos">—</span></div>
+    <div id="cmpWrap" class="cmp" style="display:none">
+      <div class="box"><div class="lab"><span class="dot" style="background:var(--dij)"></span>Dijkstra explora</div><div class="num" id="expDij">—</div></div>
+      <div class="box"><div class="lab"><span class="dot" style="background:var(--astar)"></span>A★ explora</div><div class="num" id="expAstar">—</div></div>
+    </div>
+    <div class="srow" id="expRow"><span class="k">Nodos explorados</span><span class="v" id="exp">—</span></div>
+    <div class="srow" id="ganaRow" style="display:none"><span class="k">A★ ahorra</span><span class="v" style="color:var(--origen)" id="gana">—</span></div>
+  </div>
+
+  <div class="foot">El algoritmo elige por los <b>pesos reales</b> (metros), no por cómo se ve el mapa.
+    A★ usa una heurística (distancia en línea recta) para “apuntar” al destino y explorar menos.</div>
+</div>
+
+<div class="badge" id="badge">cargando red…</div>
+<div class="credito">Grupo 1 · Álgebra II · Teoría de Grafos</div>
+
+<script src="datos_jujuy.js"></script>
+<script>
+// ------------------------------------------------------------------ datos
+const D = window.DATOS_JUJUY;
+const NODOS = D.nodos;                 // [lat, lon]
+const ARISTAS = D.aristas;             // [i, j, metros]
+const N = NODOS.length;
+
+// lista de adyacencia
+const ADY = Array.from({length:N}, ()=>[]);
+for (const [i,j,w] of ARISTAS){ ADY[i].push([j,w]); ADY[j].push([i,w]); }
+
+document.getElementById('badge').innerHTML =
+  `<b>${D.meta.V}</b> esquinas · <b>${D.meta.E}</b> cuadras<br><b>${D.meta.km}</b> km de calles`;
+
+// ------------------------------------------------------- proyección a pixeles
+let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
+for (const [la,lo] of NODOS){
+  if(la<minLat)minLat=la; if(la>maxLat)maxLat=la;
+  if(lo<minLon)minLon=lo; if(lo>maxLon)maxLon=lo;
+}
+const lat0 = (minLat+maxLat)/2;
+const k = Math.cos(lat0*Math.PI/180);           // corrige longitud por latitud
+// coordenadas base (en "grados-pixel"), se escalan al dibujar
+const BX = new Float64Array(N), BY = new Float64Array(N);
+for (let i=0;i<N;i++){
+  BX[i] = (NODOS[i][1]-minLon)*k;
+  BY[i] = (maxLat-NODOS[i][0]);
+}
+const dataW = (maxLon-minLon)*k, dataH = (maxLat-minLat);
+
+const cv = document.getElementById('mapa');
+const ctx = cv.getContext('2d');
+let view = {scale:1, x:0, y:0, base:1};
+
+function ajustar(){
+  cv.width = innerWidth*devicePixelRatio;
+  cv.height = innerHeight*devicePixelRatio;
+  cv.style.width = innerWidth+'px'; cv.style.height = innerHeight+'px';
+  const m = 60*devicePixelRatio;
+  view.base = Math.min((cv.width-2*m)/dataW, (cv.height-2*m)/dataH);
+  const w = dataW*view.base*view.scale, h = dataH*view.base*view.scale;
+  // centrar si recién cargamos
+  if(view.x===0 && view.y===0){ view.x=(cv.width-w)/2; view.y=(cv.height-h)/2; }
+  dibujar();
+}
+function sx(i){ return BX[i]*view.base*view.scale + view.x; }
+function sy(i){ return BY[i]*view.base*view.scale + view.y; }
+
+// --------------------------------------------------------------- estado app
+let origen=null, destino=null;
+let algo='astar';                 // 'astar' | 'dij'
+let anim=null;                    // animación en curso
+let overlayDij=null, overlayAstar=null; // para "comparar"
+let rutaFinal=null;
+let velocidad=18;
+
+// ------------------------------------------------------------- min-heap
+class Heap{
+  constructor(){this.a=[]}
+  get size(){return this.a.length}
+  push(p,v){const a=this.a;a.push([p,v]);let i=a.length-1;
+    while(i>0){const f=(i-1)>>1;if(a[f][0]<=a[i][0])break;[a[f],a[i]]=[a[i],a[f]];i=f;}}
+  pop(){const a=this.a,top=a[0],last=a.pop();if(a.length){a[0]=last;let i=0;
+    for(;;){let l=2*i+1,r=l+1,s=i;if(l<a.length&&a[l][0]<a[s][0])s=l;
+      if(r<a.length&&a[r][0]<a[s][0])s=r;if(s===i)break;[a[s],a[i]]=[a[i],a[s]];i=s;}}
+    return top;}
+}
+function hav(i,j){ // metros entre nodos i,j (para heurística A*)
+  const R=6371000, la1=NODOS[i][0]*Math.PI/180, la2=NODOS[j][0]*Math.PI/180;
+  const dla=(NODOS[j][0]-NODOS[i][0])*Math.PI/180, dlo=(NODOS[j][1]-NODOS[i][1])*Math.PI/180;
+  const h=Math.sin(dla/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+
+// crea un "stepper" del algoritmo (para animar la exploración)
+function crearBusqueda(tipo, s, t){
+  const g=new Float64Array(N).fill(Infinity);
+  const prev=new Int32Array(N).fill(-1);
+  const visto=new Uint8Array(N);
+  const h=new Heap();
+  g[s]=0; h.push(tipo==='astar'?hav(s,t):0, s);
+  let explorados=0, listo=false, exito=false;
+  const frontera=[]; // nodos recién sacados (para dibujar)
+  function step(){
+    if(listo) return;
+    if(h.size===0){listo=true;return;}
+    const [,u]=h.pop();
+    if(visto[u]) return;
+    visto[u]=1; explorados++; frontera.push(u);
+    if(u===t){listo=true;exito=true;return;}
+    for(const [v,w] of ADY[u]){
+      const ng=g[u]+w;
+      if(ng<g[v]){ g[v]=ng; prev[v]=u;
+        h.push(tipo==='astar'?ng+hav(v,t):ng, v); }
+    }
+  }
+  function camino(){
+    if(!exito) return null;
+    const c=[]; let u=t; while(u!==-1){c.push(u); u=prev[u];} c.reverse(); return c;
+  }
+  return {step, camino, get explorados(){return explorados}, get listo(){return listo},
+          get exito(){return exito}, visto, frontera, g, costo:()=>g[t]};
+}
+
+// ------------------------------------------------------------- animación
+function cancelar(){ if(anim){cancelAnimationFrame(anim); anim=null;} }
+
+function correr(tipos){
+  cancelar();
+  overlayDij=overlayAstar=null; rutaFinal=null;
+  const busquedas = tipos.map(tp=>({tp, b:crearBusqueda(tp, origen, destino)}));
+  function frame(){
+    const pasos = velocidad;         // cuántos nodos por frame
+    let todos=true;
+    for(const q of busquedas){
+      for(let s=0;s<pasos && !q.b.listo;s++) q.b.step();
+      if(!q.b.listo) todos=false;
+    }
+    dibujar(busquedas);
+    if(!todos){ anim=requestAnimationFrame(frame); return; }
+    // terminó: construir rutas y stats
+    anim=null;
+    for(const q of busquedas){
+      if(q.tp==='dij') overlayDij=q.b; else overlayAstar=q.b;
+    }
+    const principal = busquedas[busquedas.length-1].b; // el último define la ruta
+    rutaFinal = principal.camino();
+    dibujar(busquedas);
+    mostrarStats(busquedas, principal);
+  }
+  frame();
+}
+
+function mostrarStats(busquedas, principal){
+  const st=document.getElementById('stats'); st.classList.add('show');
+  const comparando = busquedas.length===2;
+  document.getElementById('cmpWrap').style.display = comparando?'grid':'none';
+  document.getElementById('expRow').style.display = comparando?'none':'flex';
+  document.getElementById('ganaRow').style.display = comparando?'flex':'none';
+  if(principal.exito){
+    const m=principal.costo();
+    document.getElementById('dist').textContent = m>=1000? (m/1000).toFixed(2)+' km' : Math.round(m)+' m';
+    document.getElementById('saltos').textContent = (rutaFinal.length-1)+' cuadras';
+  }else{
+    document.getElementById('dist').textContent = 'sin ruta';
+    document.getElementById('saltos').textContent = '—';
+  }
+  if(comparando){
+    const d=overlayDij.explorados, a=overlayAstar.explorados;
+    document.getElementById('expDij').textContent = d;
+    document.getElementById('expAstar').textContent = a;
+    document.getElementById('gana').textContent = d>0? '−'+Math.round(100*(d-a)/d)+'% de esquinas' : '—';
+  }else{
+    document.getElementById('exp').textContent = principal.explorados+' esquinas';
+  }
+}
+
+// ------------------------------------------------------------- dibujo
+function dibujar(busquedas){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle='#0f1420'; ctx.fillRect(0,0,cv.width,cv.height);
+
+  // red de calles (base)
+  ctx.lineWidth = Math.max(.6, .9*devicePixelRatio);
+  ctx.strokeStyle='#2b3752'; ctx.beginPath();
+  for(const [i,j] of ARISTAS){ ctx.moveTo(sx(i),sy(i)); ctx.lineTo(sx(j),sy(j)); }
+  ctx.stroke();
+
+  // exploración (nodos vistos) de cada búsqueda en curso
+  if(busquedas){
+    for(const q of busquedas){
+      const col = q.tp==='dij' ? 'rgba(74,163,255,.55)' : 'rgba(179,125,255,.6)';
+      ctx.fillStyle=col;
+      const vis=q.b.visto, r=1.7*devicePixelRatio;
+      ctx.beginPath();
+      for(let n=0;n<N;n++){ if(vis[n]){ ctx.moveTo(sx(n)+r,sy(n)); ctx.arc(sx(n),sy(n),r,0,6.2832);} }
+      ctx.fill();
+    }
+  }
+
+  // ruta final
+  if(rutaFinal && rutaFinal.length>1){
+    ctx.lineWidth = 4.5*devicePixelRatio; ctx.strokeStyle='#ffd23f';
+    ctx.lineJoin='round'; ctx.lineCap='round'; ctx.beginPath();
+    ctx.moveTo(sx(rutaFinal[0]),sy(rutaFinal[0]));
+    for(const n of rutaFinal) ctx.lineTo(sx(n),sy(n));
+    ctx.stroke();
+  }
+
+  // marcadores origen/destino
+  if(origen!=null) marcador(origen,'#2ecc71','A');
+  if(destino!=null) marcador(destino,'#ff5d5d','B');
+}
+function marcador(i,color,letra){
+  const x=sx(i),y=sy(i),r=9*devicePixelRatio;
+  ctx.beginPath(); ctx.arc(x,y,r,0,6.2832);
+  ctx.fillStyle=color; ctx.fill();
+  ctx.lineWidth=2*devicePixelRatio; ctx.strokeStyle='#fff'; ctx.stroke();
+  ctx.fillStyle='#0f1420'; ctx.font=`bold ${12*devicePixelRatio}px system-ui`;
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(letra,x,y);
+}
+
+// ----------------------------------------------------- interacción (mouse)
+function nodoCercano(px,py){
+  let best=-1, bd=Infinity;
+  for(let i=0;i<N;i++){ const dx=sx(i)-px, dy=sy(i)-py, d=dx*dx+dy*dy;
+    if(d<bd){bd=d; best=i;} }
+  return best;
+}
+let drag=null;
+cv.addEventListener('mousedown', e=>{ drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y,moved:false}; });
+addEventListener('mousemove', e=>{
+  if(!drag) return;
+  const dx=(e.clientX-drag.x)*devicePixelRatio, dy=(e.clientY-drag.y)*devicePixelRatio;
+  if(Math.abs(dx)+Math.abs(dy)>3) drag.moved=true;
+  view.x=drag.vx+dx; view.y=drag.vy+dy; dibujar(enCurso());
+});
+addEventListener('mouseup', e=>{
+  if(drag && !drag.moved) clic(e.clientX*devicePixelRatio, e.clientY*devicePixelRatio);
+  drag=null;
+});
+cv.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const mx=e.clientX*devicePixelRatio, my=e.clientY*devicePixelRatio;
+  const f = e.deltaY<0 ? 1.15 : 1/1.15;
+  // zoom hacia el cursor
+  view.x = mx-(mx-view.x)*f; view.y = my-(my-view.y)*f;
+  view.scale*=f; dibujar(enCurso());
+},{passive:false});
+
+function enCurso(){ // reconstruye lista para redibujar durante drag/zoom
+  const r=[]; if(overlayDij) r.push({tp:'dij',b:overlayDij});
+  if(overlayAstar) r.push({tp:'astar',b:overlayAstar}); return r.length?r:null;
+}
+
+function clic(px,py){
+  const nodo=nodoCercano(px,py);
+  if(origen==null || (origen!=null && destino!=null)){
+    origen=nodo; destino=null; rutaFinal=null; overlayDij=overlayAstar=null;
+    document.getElementById('stats').classList.remove('show');
+    dibujar();
+  }else{
+    destino=nodo;
+    correr(algo==='comparar'?['dij','astar']:[algo]);
+  }
+}
+
+// --------------------------------------------------------------- botones
+const bA=document.getElementById('btnAstar'), bD=document.getElementById('btnDij'),
+      bC=document.getElementById('btnComparar');
+function activar(cual){
+  algo=cual;
+  bA.classList.toggle('activo',cual==='astar');
+  bD.classList.toggle('activo',cual==='dij');
+  bC.classList.toggle('activo',cual==='comparar');
+  if(origen!=null && destino!=null) correr(cual==='comparar'?['dij','astar']:[cual]);
+}
+bA.onclick=()=>activar('astar');
+bD.onclick=()=>activar('dij');
+bC.onclick=()=>activar('comparar');
+document.getElementById('btnReset').onclick=()=>{
+  cancelar(); origen=destino=rutaFinal=overlayDij=overlayAstar=null;
+  document.getElementById('stats').classList.remove('show'); dibujar();
+};
+document.getElementById('vel').oninput=e=>{ velocidad=+e.target.value; };
+
+addEventListener('resize', ajustar);
+ajustar();
+</script>
+</body>
+</html>

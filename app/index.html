@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ganale al GPS — Camino más corto en la provincia de Jujuy · Grupo 1</title>
+<link rel="stylesheet" href="vendor/leaflet.css">
+<style>
+  :root{
+    --bg:#0a0d13; --panel:#141924; --panel2:#1d2433; --tinta:#eef2f8; --sub:#95a1b4;
+    --linea:#2a3346; --acento:#3b82f6; --acento2:#2563eb;
+    --origen:#22c55e; --destino:#ef4444;
+    --ruta:#ffd500; --dij:#ff9e2c; --astar:#1fd1d1;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:"Segoe UI",system-ui,Roboto,Arial,sans-serif;
+    background:var(--bg);color:var(--tinta);overflow:hidden}
+  #mapa{position:absolute;inset:0;background:#0a0d13;z-index:0}
+  #capa{position:absolute;inset:0;z-index:450;pointer-events:none}
+  .leaflet-container{background:#0a0d13}
+  /* convierte el mapa de calles (con nombres) a modo oscuro */
+  .leaflet-tile{filter:invert(1) hue-rotate(185deg) brightness(.92) contrast(.9);}
+
+  .panel{position:absolute;top:16px;left:16px;width:342px;max-width:calc(100vw - 32px);
+    background:var(--panel);border-radius:18px;z-index:1200;border:1px solid #232c3d;
+    box-shadow:0 18px 50px rgba(0,0,0,.55);overflow:hidden}
+  .cab{background:linear-gradient(135deg,#1e3a8a,#172554);color:#fff;padding:16px 18px 14px}
+  .cab h1{margin:0;font-size:18px;font-weight:800;display:flex;align-items:center;gap:8px}
+  .cab p{margin:6px 0 0;font-size:12px;opacity:.9;line-height:1.5}
+  .cab .chips{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
+  .chip{background:rgba(255,255,255,.16);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700}
+  .cuerpo{padding:14px 18px 16px}
+
+  .guia{display:flex;flex-direction:column;gap:7px;margin-bottom:14px}
+  .paso{display:flex;align-items:center;gap:10px;font-size:13px}
+  .pin{width:22px;height:22px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;color:#fff;font-weight:800;font-size:12px}
+
+  .seg{display:flex;background:var(--panel2);border-radius:12px;padding:4px;gap:4px;margin-bottom:10px}
+  .seg button{flex:1;border:0;background:transparent;color:var(--sub);font-weight:700;font-size:13px;
+    padding:9px 6px;border-radius:9px;cursor:pointer;transition:.15s}
+  .seg button.on{background:#2d3a52;color:#fff;box-shadow:0 1px 6px rgba(0,0,0,.35)}
+
+  .acciones{display:flex;gap:8px}
+  .acciones button{flex:1;border:1px solid var(--linea);background:var(--panel2);color:var(--tinta);
+    font-weight:700;font-size:13px;padding:11px;border-radius:11px;cursor:pointer;transition:.15s}
+  #btnIniciar{background:var(--acento);color:#fff;border-color:var(--acento);font-size:14.5px;font-weight:800}
+  #btnIniciar:hover{background:var(--acento2);border-color:var(--acento2)}
+  #btnIniciar:disabled{background:#2a3346;border-color:#2a3346;color:#5a6577;cursor:not-allowed}
+  #btnReset{flex:0 0 auto;width:46px}
+  #btnReset:hover{background:#273349}
+
+  .ctrl{margin-top:14px;display:flex;flex-direction:column;gap:11px}
+  .fila{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--sub)}
+  .fila label{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+  .fila input[type=range]{flex:1;accent-color:var(--acento)}
+  .switch{position:relative;width:38px;height:22px;background:#374257;border-radius:20px;transition:.15s;flex:0 0 auto}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.15s}
+  input:checked + .switch{background:var(--acento)}
+  input:checked + .switch::after{transform:translateX(16px)}
+  .fila input[type=checkbox]{display:none}
+
+  .res{margin-top:15px;border-top:1px solid var(--linea);padding-top:14px;display:none}
+  .res.show{display:block}
+  .res .top{display:flex;align-items:baseline;justify-content:space-between}
+  .res .dist{font-size:28px;font-weight:900;color:var(--ruta);line-height:1;font-variant-numeric:tabular-nums}
+  .res .cuadras{font-size:12.5px;color:var(--sub)}
+  .cmp{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:13px}
+  .cmp .box{border:1px solid var(--linea);border-radius:12px;padding:10px 11px;background:var(--panel2)}
+  .cmp .box .lab{font-size:11px;color:var(--sub);display:flex;align-items:center;gap:6px;font-weight:700}
+  .cmp .box .num{font-size:21px;font-weight:900;font-variant-numeric:tabular-nums;margin-top:3px}
+  .ahorro{margin-top:11px;background:#0e2e1c;color:#4ade80;border:1px solid #14532d;border-radius:10px;
+    padding:9px 12px;font-size:12.5px;font-weight:800;text-align:center;display:none}
+  .expsolo{margin-top:11px;font-size:12.5px;color:var(--sub);display:flex;justify-content:space-between}
+  .expsolo b{color:var(--tinta);font-variant-numeric:tabular-nums}
+  .dotc{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .nota{margin-top:13px;font-size:11px;color:#6b7687;line-height:1.5}
+
+  .leyenda{position:absolute;right:16px;bottom:20px;background:rgba(20,25,36,.94);border:1px solid #232c3d;
+    border-radius:12px;padding:10px 13px;z-index:1200;box-shadow:0 8px 24px rgba(0,0,0,.5);font-size:12px;color:var(--tinta)}
+  .leyenda div{display:flex;align-items:center;gap:8px;margin:4px 0}
+  .leyenda .sw{width:16px;height:4px;border-radius:3px}
+  .credito{position:absolute;right:16px;top:16px;background:rgba(20,25,36,.92);border:1px solid #232c3d;border-radius:10px;
+    padding:7px 12px;font-size:11.5px;color:var(--sub);z-index:1200;font-weight:600}
+  .aviso{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:#3a2e05;color:#fcd34d;
+    padding:8px 14px;border-radius:10px;font-size:12px;z-index:1300;display:none}
+  @media(max-width:600px){.panel{width:calc(100vw - 32px)}.leyenda,.credito{display:none}}
+</style>
+</head>
+<body>
+<div id="mapa"></div>
+<canvas id="capa"></canvas>
+
+<div class="panel">
+  <div class="cab">
+    <h1>Ganale al GPS</h1>
+    <p>Camino más corto en la red <b>real</b> de rutas y calles de la
+       <b>provincia de Jujuy</b>. Cada cruce es un <b>nodo</b>; cada tramo, una <b>arista</b>.</p>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div class="cuerpo">
+    <div class="guia">
+      <div class="paso"><span class="pin" style="background:var(--origen)">A</span><div>Tocá el mapa: fijás el <b>origen</b></div></div>
+      <div class="paso"><span class="pin" style="background:var(--destino)">B</span><div>Tocá de nuevo: fijás el <b>destino</b></div></div>
+      <div class="paso"><span class="pin" style="background:var(--acento)">▶</span><div>Apretá <b>Iniciar</b> y mirá el <b>camino más corto</b></div></div>
+    </div>
+
+    <div class="seg" id="seg">
+      <button data-a="astar" class="on">A★</button>
+      <button data-a="dij">Dijkstra</button>
+      <button data-a="comparar">Comparar</button>
+    </div>
+    <div class="acciones">
+      <button id="btnIniciar" disabled>▶ Iniciar</button>
+      <button id="btnReset" title="Reiniciar">↺</button>
+    </div>
+
+    <div class="ctrl">
+      <div class="fila">⏱️ Velocidad
+        <input id="vel" type="range" min="1" max="200" value="12">
+      </div>
+      <div class="fila">
+        <label><input type="checkbox" id="chkGrafo"><span class="switch"></span>Mostrar el grafo (nodos y aristas)</label>
+      </div>
+    </div>
+
+    <div id="res" class="res">
+      <div class="top">
+        <span class="dist" id="dist">—</span>
+        <span class="cuadras" id="cuadras"></span>
+      </div>
+      <div id="cmp" class="cmp" style="display:none">
+        <div class="box"><div class="lab"><span class="dotc" style="background:var(--dij)"></span>Dijkstra explora</div><div class="num" id="expDij" style="color:var(--dij)">—</div></div>
+        <div class="box"><div class="lab"><span class="dotc" style="background:var(--astar)"></span>A★ explora</div><div class="num" id="expAstar" style="color:var(--astar)">—</div></div>
+      </div>
+      <div id="ahorro" class="ahorro"></div>
+      <div id="expsolo" class="expsolo" style="display:none"><span>Nodos explorados</span><b id="exp">—</b></div>
+    </div>
+
+    <div class="nota">El GPS elige por los <b>pesos reales</b> (metros), no por cómo se ve el mapa.
+      A★ usa una heurística (distancia en línea recta) para apuntar al destino y explorar menos.</div>
+  </div>
+</div>
+
+<div class="credito">Grupo 1 · Álgebra II · Teoría de Grafos</div>
+<div class="leyenda" id="leyenda">
+  <div><span class="sw" style="background:var(--ruta);box-shadow:0 0 6px var(--ruta)"></span> Camino más corto</div>
+  <div><span class="sw" style="background:var(--dij)"></span> Calles exploradas por Dijkstra</div>
+  <div><span class="sw" style="background:var(--astar)"></span> Calles exploradas por A★</div>
+</div>
+<div class="aviso" id="aviso">Sin conexión: el mapa de fondo no cargó, pero el grafo y el cálculo funcionan igual.</div>
+
+<script src="vendor/leaflet.js"></script>
+<script src="datos_jujuy.js"></script>
+<script>
+// ====================================================== datos y grafo
+const D = window.DATOS_JUJUY;
+const NODOS = D.nodos, ARISTAS = D.aristas, N = NODOS.length, M = ARISTAS.length;
+const ADY = Array.from({length:N}, ()=>[]);
+for (let k=0;k<M;k++){ const [i,j,w]=ARISTAS[k]; ADY[i].push([j,w,k]); ADY[j].push([i,w,k]); }
+document.getElementById('chips').innerHTML =
+  `<span class="chip">${D.meta.V.toLocaleString('es')} nodos</span>
+   <span class="chip">${D.meta.E.toLocaleString('es')} tramos</span>
+   <span class="chip">${D.meta.km.toLocaleString('es')} km</span>`;
+
+// ====================================================== mapa Leaflet (oscuro)
+let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
+for (const [la,lo] of NODOS){
+  if(la<minLat)minLat=la; if(la>maxLat)maxLat=la;
+  if(lo<minLon)minLon=lo; if(lo>maxLon)maxLon=lo;
+}
+const map = L.map('mapa', {zoomControl:true, zoomAnimation:false, markerZoomAnimation:false})
+  .setView([-24.188, -65.300], 14);   // abre sobre San Salvador de Jujuy (detalle)
+
+let tilesOK=false;
+const calle='https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+const tiles = L.tileLayer(calle, {maxZoom:19, attribution:'Tiles © Esri'});
+tiles.on('tileload', ()=>{ tilesOK=true; });
+tiles.on('tileerror', ()=>{ if(!tilesOK){ document.getElementById('aviso').style.display='block';
+  document.getElementById('chkGrafo').checked=true; mostrarGrafo=true; dibujar(enCurso()); } });
+tiles.addTo(map);
+
+// ====================================================== canvas overlay
+const cv = document.getElementById('capa');
+const ctx = cv.getContext('2d');
+const dpr = window.devicePixelRatio || 1;
+const PX = new Float64Array(N), PY = new Float64Array(N);   // pantalla
+const LPX = new Float64Array(N), LPY = new Float64Array(N); // capa (fijo por zoom)
+let zoomDirty = true;
+
+function ajustarCanvas(){
+  const s = map.getSize();
+  if(cv.width!==s.x*dpr || cv.height!==s.y*dpr){
+    cv.width=s.x*dpr; cv.height=s.y*dpr; cv.style.width=s.x+'px'; cv.style.height=s.y+'px';
+  }
+}
+function proyectarCapa(){   // caro: solo al cambiar el zoom
+  for(let i=0;i<N;i++){ const p=map.latLngToLayerPoint([NODOS[i][0], NODOS[i][1]]); LPX[i]=p.x; LPY[i]=p.y; }
+  zoomDirty=false;
+}
+function reproyectar(){     // barato: capa -> pantalla (solo un desplazamiento)
+  if(zoomDirty) proyectarCapa();
+  const o = map.layerPointToContainerPoint(L.point(0,0));
+  for(let i=0;i<N;i++){ PX[i]=LPX[i]+o.x; PY[i]=LPY[i]+o.y; }
+}
+
+// ====================================================== estado
+let origen=null, destino=null, algo='astar', velocidad=12;
+let anim=null, overlayDij=null, overlayAstar=null, rutaFinal=null, mostrarGrafo=false;
+
+// ====================================================== min-heap + algoritmos
+class Heap{
+  constructor(){this.a=[]}
+  get size(){return this.a.length}
+  push(p,v){const a=this.a;a.push([p,v]);let i=a.length-1;
+    while(i>0){const f=(i-1)>>1;if(a[f][0]<=a[i][0])break;[a[f],a[i]]=[a[i],a[f]];i=f;}}
+  pop(){const a=this.a,top=a[0],last=a.pop();if(a.length){a[0]=last;let i=0;
+    for(;;){let l=2*i+1,r=l+1,s=i;if(l<a.length&&a[l][0]<a[s][0])s=l;
+      if(r<a.length&&a[r][0]<a[s][0])s=r;if(s===i)break;[a[s],a[i]]=[a[i],a[s]];i=s;}}
+    return top;}
+}
+function hav(i,j){
+  const R=6371000, la1=NODOS[i][0]*Math.PI/180, la2=NODOS[j][0]*Math.PI/180;
+  const dla=(NODOS[j][0]-NODOS[i][0])*Math.PI/180, dlo=(NODOS[j][1]-NODOS[i][1])*Math.PI/180;
+  const h=Math.sin(dla/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+function crearBusqueda(tipo, s, t){
+  const g=new Float64Array(N).fill(Infinity);
+  const prev=new Int32Array(N).fill(-1);
+  const visto=new Uint8Array(N);
+  const ex=new Uint8Array(M);                 // calles (aristas) exploradas
+  const h=new Heap();
+  g[s]=0; h.push(tipo==='astar'?hav(s,t):0, s);
+  let explorados=0, listo=false, exito=false;
+  function step(){
+    if(listo) return;
+    if(h.size===0){listo=true;return;}
+    const [,u]=h.pop();
+    if(visto[u]) return;
+    visto[u]=1; explorados++;
+    if(u===t){listo=true;exito=true;return;}
+    for(const [v,w,k] of ADY[u]){
+      ex[k]=1;                                  // marcar la calle cubierta
+      const ng=g[u]+w;
+      if(ng<g[v]){ g[v]=ng; prev[v]=u;
+        h.push(tipo==='astar'?ng+hav(v,t):ng, v); }
+    }
+  }
+  function camino(){ if(!exito) return null;
+    const c=[]; let u=t; while(u!==-1){c.push(u); u=prev[u];} c.reverse(); return c; }
+  return {step, camino, ex, costo:()=>g[t],
+          get explorados(){return explorados}, get listo(){return listo}, get exito(){return exito}};
+}
+
+// ====================================================== animación
+function cancelar(){ if(anim){cancelAnimationFrame(anim); anim=null;} }
+function correr(tipos){
+  cancelar(); overlayDij=overlayAstar=null; rutaFinal=null;
+  const busquedas = tipos.map(tp=>({tp, b:crearBusqueda(tp, origen, destino)}));
+  function frame(){
+    let todos=true;
+    for(const q of busquedas){
+      for(let s=0;s<velocidad && !q.b.listo;s++) q.b.step();
+      if(!q.b.listo) todos=false;
+    }
+    dibujar(busquedas);
+    if(!todos){ anim=requestAnimationFrame(frame); return; }
+    anim=null;
+    for(const q of busquedas){ if(q.tp==='dij') overlayDij=q.b; else overlayAstar=q.b; }
+    const principal = busquedas[busquedas.length-1].b;
+    rutaFinal = principal.camino();
+    dibujar(busquedas);
+    mostrarRes(busquedas, principal);
+  }
+  frame();
+}
+function mostrarRes(busquedas, principal){
+  const res=document.getElementById('res'); res.classList.add('show');
+  const comparando = busquedas.length===2;
+  document.getElementById('cmp').style.display = comparando?'grid':'none';
+  document.getElementById('ahorro').style.display = comparando?'block':'none';
+  document.getElementById('expsolo').style.display = comparando?'none':'flex';
+  if(principal.exito){
+    const m=principal.costo();
+    document.getElementById('dist').textContent = m>=1000? (m/1000).toFixed(m>=100000?0:1)+' km' : Math.round(m)+' m';
+    document.getElementById('cuadras').textContent = (principal.camino().length-1)+' tramos';
+  }else{
+    document.getElementById('dist').textContent = 'sin ruta';
+    document.getElementById('cuadras').textContent = '';
+  }
+  if(comparando){
+    const d=overlayDij.explorados, a=overlayAstar.explorados;
+    document.getElementById('expDij').textContent = d.toLocaleString('es');
+    document.getElementById('expAstar').textContent = a.toLocaleString('es');
+    document.getElementById('ahorro').textContent =
+      d>0? `A★ exploró ${Math.round(100*(d-a)/d)}% menos que Dijkstra` : '';
+  }else{
+    document.getElementById('exp').textContent = principal.explorados.toLocaleString('es');
+  }
+}
+
+// ====================================================== dibujo
+function colorDe(tp){ return tp==='dij' ? '#ff9e2c' : '#1fd1d1'; }
+function trazar(exArr, color, alpha, width){
+  ctx.globalAlpha=alpha; ctx.strokeStyle=color; ctx.lineWidth=width;
+  ctx.beginPath();
+  for(let k=0;k<M;k++) if(exArr[k]){ const a=ARISTAS[k]; ctx.moveTo(PX[a[0]],PY[a[0]]); ctx.lineTo(PX[a[1]],PY[a[1]]); }
+  ctx.stroke(); ctx.globalAlpha=1;
+}
+function dibujar(busquedas){
+  ajustarCanvas();
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const s=map.getSize();
+  ctx.clearRect(0,0,s.x,s.y);
+  reproyectar();
+
+  const foco = !!rutaFinal;   // ya hay camino -> enfocar: opacar lo explorado
+
+  // grafo completo (opcional)
+  if(mostrarGrafo){
+    ctx.globalAlpha=foco?.25:.5; ctx.lineWidth=1; ctx.strokeStyle='#4a5878';
+    ctx.beginPath();
+    for(let k=0;k<M;k++){ const a=ARISTAS[k]; ctx.moveTo(PX[a[0]],PY[a[0]]); ctx.lineTo(PX[a[1]],PY[a[1]]); }
+    ctx.stroke(); ctx.globalAlpha=1;
+  }
+
+  // calles exploradas por cada algoritmo
+  if(busquedas){
+    for(const q of busquedas)
+      trazar(q.b.ex, colorDe(q.tp), foco?0.13:0.6, foco?1.2:2.2);
+  }
+
+  // camino: se ILUMINA (glow) cuando ya está resuelto
+  if(rutaFinal && rutaFinal.length>1){
+    ctx.lineJoin='round'; ctx.lineCap='round';
+    ctx.shadowColor='#ffe066'; ctx.shadowBlur=20;
+    ctx.beginPath(); ctx.moveTo(PX[rutaFinal[0]],PY[rutaFinal[0]]);
+    for(const n of rutaFinal) ctx.lineTo(PX[n],PY[n]);
+    ctx.lineWidth=7; ctx.strokeStyle='#fff6c2'; ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.lineWidth=3.5; ctx.strokeStyle='#ffd500'; ctx.stroke();
+  }
+
+  if(origen!=null) marcador(PX[origen],PY[origen],'#22c55e','A');
+  if(destino!=null) marcador(PX[destino],PY[destino],'#ef4444','B');
+}
+function marcador(x,y,color,letra){
+  ctx.beginPath(); ctx.arc(x,y,11,0,6.2832);
+  ctx.fillStyle=color; ctx.fill();
+  ctx.lineWidth=3; ctx.strokeStyle='#fff'; ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.font='bold 13px Segoe UI, sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(letra,x,y);
+}
+function enCurso(){
+  const r=[]; if(overlayDij) r.push({tp:'dij',b:overlayDij});
+  if(overlayAstar) r.push({tp:'astar',b:overlayAstar}); return r.length?r:null;
+}
+
+map.on('zoomstart zoom zoomend viewreset resize', ()=>{ zoomDirty=true; });
+map.on('move zoom zoomend viewreset resize moveend', ()=>dibujar(enCurso()));
+
+// ====================================================== interacción
+function nodoCercano(cp){
+  let best=-1, bd=Infinity;
+  for(let i=0;i<N;i++){ const dx=PX[i]-cp.x, dy=PY[i]-cp.y, d=dx*dx+dy*dy;
+    if(d<bd){bd=d; best=i;} }
+  return best;
+}
+map.on('click', e=>{
+  reproyectar();
+  const nodo = nodoCercano(e.containerPoint);
+  if(origen==null || (origen!=null && destino!=null)){
+    origen=nodo; destino=null; rutaFinal=null; overlayDij=overlayAstar=null;
+    document.getElementById('res').classList.remove('show');
+  }else{
+    destino=nodo;
+  }
+  actualizarIniciar();
+  dibujar();
+});
+
+// ====================================================== controles
+const seg=document.getElementById('seg');
+const btnIniciar=document.getElementById('btnIniciar');
+function actualizarIniciar(){ btnIniciar.disabled = !(origen!=null && destino!=null); }
+function activar(cual){
+  algo=cual;
+  seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.a===cual));
+}
+seg.querySelectorAll('button').forEach(b=> b.onclick=()=>activar(b.dataset.a));
+btnIniciar.onclick=()=>{ if(origen!=null && destino!=null) correr(algo==='comparar'?['dij','astar']:[algo]); };
+document.getElementById('btnReset').onclick=()=>{
+  cancelar(); origen=destino=rutaFinal=overlayDij=overlayAstar=null;
+  document.getElementById('res').classList.remove('show'); actualizarIniciar(); dibujar();
+};
+document.getElementById('vel').oninput=e=>{ velocidad=+e.target.value; };
+document.getElementById('chkGrafo').onchange=e=>{ mostrarGrafo=e.target.checked; dibujar(enCurso()); };
+
+// arranque
+ajustarCanvas(); reproyectar(); dibujar();
+</script>
+</body>
+</html>
